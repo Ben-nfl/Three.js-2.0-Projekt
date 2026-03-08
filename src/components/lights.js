@@ -3,25 +3,25 @@ import { ROOM_SIZE, WALL_HEIGHT } from './dungeon.js';
 
 export function createLights(scene) {
   // 1. AmbientLight - very dark blue fill
-  const ambient = new THREE.AmbientLight(0x1a1a3a, 0.15);
+  const ambient = new THREE.AmbientLight(0x1a1a3a, 1.2);
   scene.add(ambient);
 
   // 2-4. PointLights for torches (warm orange, flickering)
-  const torchLight1 = new THREE.PointLight(0xFF8833, 1.5, 10, 1.5);
+  const torchLight1 = new THREE.PointLight(0xFF8833, 4.0, 14, 1.5);
   torchLight1.position.set(-ROOM_SIZE / 2 + 0.5, 3.2, -2);
   torchLight1.castShadow = true;
   torchLight1.shadow.mapSize.set(512, 512);
   torchLight1.shadow.radius = 4;
   scene.add(torchLight1);
 
-  const torchLight2 = new THREE.PointLight(0xFF8833, 1.5, 10, 1.5);
+  const torchLight2 = new THREE.PointLight(0xFF8833, 4.0, 14, 1.5);
   torchLight2.position.set(ROOM_SIZE / 2 - 0.5, 3.2, -2);
   torchLight2.castShadow = true;
   torchLight2.shadow.mapSize.set(512, 512);
   torchLight2.shadow.radius = 4;
   scene.add(torchLight2);
 
-  const torchLight3 = new THREE.PointLight(0xCC6622, 1.2, 10, 1.5);
+  const torchLight3 = new THREE.PointLight(0xCC6622, 3.5, 14, 1.5);
   torchLight3.position.set(0, 3.2, -ROOM_SIZE / 2 + 0.5);
   torchLight3.castShadow = true;
   torchLight3.shadow.mapSize.set(512, 512);
@@ -34,7 +34,7 @@ export function createLights(scene) {
   scene.add(crystalLight);
 
   // 6. SpotLight - ceiling crack beam
-  const spotLight = new THREE.SpotLight(0xFFEECC, 0.8, 12, Math.PI / 8, 0.5, 1);
+  const spotLight = new THREE.SpotLight(0xFFEECC, 4.0, 16, Math.PI / 8, 0.5, 1);
   spotLight.position.set(1, WALL_HEIGHT - 0.1, -2);
   spotLight.target.position.set(1, 0, -2);
   spotLight.castShadow = true;
@@ -43,7 +43,7 @@ export function createLights(scene) {
   scene.add(spotLight.target);
 
   // 7. HemisphereLight - subtle fill
-  const hemiLight = new THREE.HemisphereLight(0x222244, 0x111100, 0.1);
+  const hemiLight = new THREE.HemisphereLight(0x222244, 0x111100, 0.7);
   scene.add(hemiLight);
 
   const torchLights = [torchLight1, torchLight2, torchLight3];

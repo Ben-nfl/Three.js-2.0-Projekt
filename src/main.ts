@@ -13,9 +13,18 @@ import { createDecorations } from './components/decorations.js';
 import { createPostProcessing } from './components/postprocessing.js';
 import { createEnvMap, applyEnvMap } from './components/envmap.js';
 import { createGUI, getDefaultParams } from './components/gui.js';
+import { createCar, updateCar } from './components/car.js';
+
+// Typen für die Szenenparameter
+interface SceneParams {
+  animSpeed: number;
+  dustEnabled: boolean;
+  _helperCallback?: (show: boolean) => void;
+  [key: string]: unknown;
+}
 
 // Init
-const canvas = document.getElementById('dungeon-canvas');
+const canvas = document.getElementById('dungeon-canvas') as HTMLCanvasElement;
 const { scene, camera, renderer, controls } = createScene(canvas);
 
 // Materials
@@ -35,15 +44,17 @@ const crystal = createCrystal(scene, materials);
 const lights = createLights(scene);
 const particleData = createParticles(scene);
 createDecorations(scene, materials);
+const carData = createCar(scene);
 
 // Post-Processing (Bloom)
 const { composer, bloomPass } = createPostProcessing(renderer, scene, camera);
 
 // Light helpers (toggled via GUI)
-const helpers = [];
-function toggleHelpers(show) {
+const helpers: THREE.Object3D[] = [];
+
+function toggleHelpers(show: boolean): void {
   if (show && helpers.length === 0) {
-    lights.torchLights.forEach((l) => {
+    lights.torchLights.forEach((l: THREE.PointLight) => {
       const h = new THREE.PointLightHelper(l, 0.3);
       scene.add(h);
       helpers.push(h);
@@ -52,16 +63,16 @@ function toggleHelpers(show) {
     scene.add(sh);
     helpers.push(sh);
   } else if (!show) {
-    helpers.forEach((h) => {
+    helpers.forEach((h: THREE.Object3D) => {
       scene.remove(h);
-      h.dispose();
+      (h as THREE.PointLightHelper | THREE.SpotLightHelper).dispose();
     });
     helpers.length = 0;
   }
 }
 
-// GUI - scene direkt übergeben (kein canvas.__scene Hack mehr)
-const params = getDefaultParams();
+// GUI
+const params: SceneParams = getDefaultParams();
 params._helperCallback = toggleHelpers;
 const gui = createGUI(params, {
   lights,
@@ -78,10 +89,10 @@ const gui = createGUI(params, {
 // Animation loop
 const clock = new THREE.Clock();
 
-function animate() {
+function animate(): void {
   requestAnimationFrame(animate);
 
-  const elapsed = clock.getElapsedTime() * params.animSpeed;
+  const elapsed: number = clock.getElapsedTime() * (params.animSpeed as number);
 
   // Update animations
   updateTorchFlicker(torches, elapsed, params);
@@ -89,10 +100,13 @@ function animate() {
   updateCrystal(crystal, elapsed, params);
   updateTreasure(treasure, elapsed);
   updateParticles(particleData, elapsed, params.dustEnabled);
+  updateCar(carData, elapsed);
 
   // Update helpers if visible
   helpers.forEach((h) => {
-    if (h.update) h.update();
+    if ('update' in h && typeof (h as { update?: () => void }).update === 'function') {
+      (h as { update: () => void }).update();
+    }
   });
 
   controls.update();

@@ -122,13 +122,13 @@ export function getDefaultParams() {
     // Atmosphere
     fogDensity: 0.04,
     fogColor: '#0a0808',
-    ambientIntensity: 0.15,
-    exposure: 0.8,
+    ambientIntensity: 1.2,
+    exposure: 2.0,
     bloomStrength: 0.6,
     bloomThreshold: 0.85,
 
     // Torches
-    torchIntensity: 1.5,
+    torchIntensity: 4.0,
     torchColor: '#ff8833',
     flickerSpeed: 1.0,
     flickerAmount: 1.0,
