@@ -3,8 +3,9 @@ import { createScene } from './components/scene.js';
 import { createRaceTrack } from './components/racetrack.js';
 import { createTrees } from './components/trees.js';
 import { createRaceLights } from './components/raceLights.js';
-import { createCar, updateCar } from './components/car.js';
+import { createCar, updateCar, carParams } from './components/car.js';
 import { createPostProcessing } from './components/postprocessing.js';
+import { createGUI } from './components/gui.js';
 
 // Init
 const canvas = document.getElementById('dungeon-canvas') as HTMLCanvasElement;
@@ -21,6 +22,9 @@ const { composer, bloomPass } = createPostProcessing(renderer, scene, camera);
 bloomPass.strength = 0.15;
 bloomPass.threshold = 0.9;
 bloomPass.radius = 0.3;
+
+// GUI
+createGUI(raceLights, bloomPass, renderer, scene, carParams);
 
 // Animations-Loop
 const clock = new THREE.Clock();

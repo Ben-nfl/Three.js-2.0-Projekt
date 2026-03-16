@@ -3,6 +3,15 @@ import { TRACK_RX, TRACK_RZ, TRACK_WIDTH } from './racetrack.js';
 
 const SEGMENTS = 120;
 
+// Tribünen-Bereich ausschließen
+const GRANDSTAND_X_MIN = TRACK_RX + TRACK_WIDTH / 2 + 1.0;  // etwas vor der Front
+const GRANDSTAND_X_MAX = TRACK_RX + TRACK_WIDTH / 2 + 2.5 + 7 * 1.8 + 1.5; // hinter Rückwand
+const GRANDSTAND_Z_HALF = 28 / 2 + 2.0; // halbe Länge + Puffer
+
+function isInGrandstand(x, z) {
+  return x >= GRANDSTAND_X_MIN && x <= GRANDSTAND_X_MAX && Math.abs(z) <= GRANDSTAND_Z_HALF;
+}
+
 const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
 const leafMat1 = new THREE.MeshLambertMaterial({ color: 0x2a7a1e });
 const leafMat2 = new THREE.MeshLambertMaterial({ color: 0x1e5c14 });
@@ -57,13 +66,16 @@ export function createTrees(scene) {
     const nx = tnz;
     const nz = -tnx;
 
-    // Outer trees – skip grandstand area (t near 0)
-    const nearStart = Math.abs(Math.cos(t)) > 0.85 && Math.sin(t) > -0.1 && Math.sin(t) < 0.4;
-    if (!nearStart) {
+    // Outer trees – skip grandstand area
+    {
       const spreadOuter = outerOffset + (Math.sin(i * 7.3) * 0.5 + 0.5) * 4;
-      const h = 4.5 + (Math.sin(i * 3.7) * 0.5 + 0.5) * 3;
-      const r = 1.2 + (Math.sin(i * 2.1) * 0.5 + 0.5) * 0.6;
-      createTree(scene, cx + nx * spreadOuter, cz + nz * spreadOuter, h, r);
+      const tx = cx + nx * spreadOuter;
+      const tz = cz + nz * spreadOuter;
+      if (!isInGrandstand(tx, tz)) {
+        const h = 4.5 + (Math.sin(i * 3.7) * 0.5 + 0.5) * 3;
+        const r = 1.2 + (Math.sin(i * 2.1) * 0.5 + 0.5) * 0.6;
+        createTree(scene, tx, tz, h, r);
+      }
     }
 
     // Inner trees (infield)
@@ -74,7 +86,7 @@ export function createTrees(scene) {
       // Only if clearly inside the oval (avoid clipping the track)
       const normalizedX = ix / (TRACK_RX - TRACK_WIDTH);
       const normalizedZ = iz / (TRACK_RZ - TRACK_WIDTH);
-      if (normalizedX * normalizedX + normalizedZ * normalizedZ < 0.85) {
+      if (normalizedX * normalizedX + normalizedZ * normalizedZ < 0.85 && !isInGrandstand(ix, iz)) {
         const h = 3.5 + (Math.sin(i * 4.3) * 0.5 + 0.5) * 2.5;
         const r = 1.0 + (Math.sin(i * 1.9) * 0.5 + 0.5) * 0.5;
         createTree(scene, ix, iz, h, r);
@@ -88,6 +100,7 @@ export function createTrees(scene) {
     [6, -2], [-6, 4], [0, 6], [0, -6],
   ];
   for (const [px, pz] of infieldPositions) {
+    if (isInGrandstand(px, pz)) continue;
     const h = 4 + Math.abs(Math.sin(px + pz)) * 3;
     const r = 1.1 + Math.abs(Math.cos(px * pz)) * 0.5;
     createTree(scene, px, pz, h, r);
@@ -99,8 +112,7 @@ export function createTrees(scene) {
     const dist = TRACK_RX + TRACK_WIDTH / 2 + 12 + Math.sin(i * 3.7) * 5;
     const x = Math.cos(angle) * dist;
     const z = Math.sin(angle) * dist * (TRACK_RZ / TRACK_RX);
-    // Skip the grandstand area
-    if (Math.abs(x) > TRACK_RX + 5 && x > 0) continue;
+    if (isInGrandstand(x, z)) continue;
     const h = 5 + Math.abs(Math.sin(i * 2.3)) * 4;
     const r = 1.5 + Math.abs(Math.cos(i * 1.7)) * 0.8;
     createTree(scene, x, z, h, r);

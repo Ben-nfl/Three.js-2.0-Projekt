@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createTerrainHeightMap, createTerrainNormalMap } from './textures.js';
 
 export const TRACK_RX = 20;
 export const TRACK_RZ = 14;
@@ -39,9 +40,23 @@ function computeEdgePoints() {
 export function createRaceTrack(scene) {
   const { inner, center, outer } = computeEdgePoints();
 
-  // --- Grass ground ---
-  const groundGeo = new THREE.PlaneGeometry(150, 120);
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x3d8c3d });
+  // --- Grass ground (with height map + normal map) ---
+  const terrainHeightMap = createTerrainHeightMap();
+  const terrainNormalMap = createTerrainNormalMap();
+  terrainHeightMap.repeat.set(8, 6);
+  terrainNormalMap.repeat.set(8, 6);
+
+  const groundGeo = new THREE.PlaneGeometry(150, 120, 80, 60);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x3d8c3d,
+    normalMap: terrainNormalMap,
+    normalScale: new THREE.Vector2(1.5, 1.5),
+    displacementMap: terrainHeightMap,
+    displacementScale: 0.25,
+    displacementBias: -0.12,
+    roughness: 0.9,
+    metalness: 0.0,
+  });
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;

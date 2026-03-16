@@ -165,6 +165,87 @@ export function createWoodTexture() {
   return texture;
 }
 
+// Procedural terrain height map (gentle rolling hills for grass ground)
+export function createTerrainHeightMap() {
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(size, size);
+  const data = imageData.data;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      let h = 128;
+      h += Math.sin(x * 0.018) * Math.sin(y * 0.015) * 45;
+      h += Math.sin(x * 0.047 + 1.3) * Math.sin(y * 0.038 + 0.7) * 22;
+      h += Math.sin(x * 0.09 + 2.1) * Math.cos(y * 0.082 + 1.5) * 10;
+      // subtle pixel noise
+      h += ((Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1) * 6 - 3;
+      const v = Math.max(0, Math.min(255, h));
+      data[i] = data[i + 1] = data[i + 2] = v;
+      data[i + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+// Procedural terrain normal map (derived from terrain height gradient)
+export function createTerrainNormalMap() {
+  const size = 512;
+
+  // Pre-compute height buffer
+  const heights = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let h = 128;
+      h += Math.sin(x * 0.018) * Math.sin(y * 0.015) * 45;
+      h += Math.sin(x * 0.047 + 1.3) * Math.sin(y * 0.038 + 0.7) * 22;
+      h += Math.sin(x * 0.09 + 2.1) * Math.cos(y * 0.082 + 1.5) * 10;
+      heights[y * size + x] = h;
+    }
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(size, size);
+  const data = imageData.data;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const xl = heights[y * size + Math.max(0, x - 1)];
+      const xr = heights[y * size + Math.min(size - 1, x + 1)];
+      const yd = heights[Math.max(0, y - 1) * size + x];
+      const yu = heights[Math.min(size - 1, y + 1) * size + x];
+
+      const scale = 0.045;
+      let nx = (xl - xr) * scale;
+      let ny = (yd - yu) * scale;
+      const len = Math.sqrt(nx * nx + ny * ny + 1);
+      nx /= len; ny /= len;
+
+      data[i]     = Math.max(0, Math.min(255, (nx * 0.5 + 0.5) * 255));
+      data[i + 1] = Math.max(0, Math.min(255, (ny * 0.5 + 0.5) * 255));
+      data[i + 2] = 255;
+      data[i + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
 // Procedural stone color texture
 export function createStoneColorTexture() {
   const size = 512;

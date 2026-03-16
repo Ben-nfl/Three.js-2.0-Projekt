@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { TRACK_RX, TRACK_RZ } from './racetrack.js';
 
-const DRIVE_SPEED = 0.12;    // Runden pro Sekunde
+// Mutable so GUI can adjust it at runtime
+export const carParams = { speed: 0.12 };  // Runden pro Sekunde
+
+const DRIVE_SPEED = 0.12;    // Runden pro Sekunde (initial)
 const CAR_HEIGHT = 0.12;     // Leicht über dem Boden
 const WHEEL_RADIUS = 0.6;
 
@@ -63,7 +66,7 @@ export function createCar(scene) {
 export function updateCar(carData, elapsed) {
   if (!carData.model) return;
 
-  const t = elapsed * DRIVE_SPEED * Math.PI * 2;
+  const t = elapsed * carParams.speed * Math.PI * 2;
 
   // Position auf Oval-Bahn
   carData.model.position.x = Math.cos(t) * TRACK_RX;
@@ -71,11 +74,11 @@ export function updateCar(carData, elapsed) {
   carData.model.position.z = Math.sin(t) * TRACK_RZ;
 
   // Tangenten-Richtung des Ovals → Fahrtrichtung
-  // Tangent: dx/dt = -sin(t)*RX, dz/dt = cos(t)*RZ
   carData.model.rotation.y = Math.atan2(-Math.sin(t) * TRACK_RX, Math.cos(t) * TRACK_RZ) - Math.PI / 2;
 
-  // Physikalisch korrekte Radrotation
-  const wheelAngle = elapsed * WHEEL_ANGULAR_SPEED;
+  // Radrotation skaliert mit aktueller Geschwindigkeit
+  const linearSpeed = carParams.speed * TRACK_CIRCUMFERENCE;
+  const wheelAngle = elapsed * (linearSpeed / WHEEL_RADIUS);
   WHEEL_NAMES.forEach((name) => {
     const wheel = carData.wheels[name];
     if (wheel) wheel.rotation.x = wheelAngle;
