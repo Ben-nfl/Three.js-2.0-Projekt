@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { TRACK_RX, TRACK_RZ } from './racetrack.js';
 
-const DRIVE_RADIUS = 3.5;
-const DRIVE_SPEED = 0.4;   // Runden pro Sekunde
-const CAR_HEIGHT = 0.0;
-const WHEEL_RADIUS = 0.6;  // Größerer Wert = langsamere Radrotation
+const DRIVE_SPEED = 0.12;    // Runden pro Sekunde
+const CAR_HEIGHT = 0.12;     // Leicht über dem Boden
+const WHEEL_RADIUS = 0.6;
 
-// Umfang der Kreisbahn → Radgeschwindigkeit physikalisch korrekt ableiten
-const CAR_LINEAR_SPEED = DRIVE_SPEED * 2 * Math.PI * DRIVE_RADIUS;
+// Ramanujan-Näherung für Oval-Umfang
+const _h = Math.pow((TRACK_RX - TRACK_RZ) / (TRACK_RX + TRACK_RZ), 2);
+const TRACK_CIRCUMFERENCE = Math.PI * (TRACK_RX + TRACK_RZ) * (1 + 3 * _h / (10 + Math.sqrt(4 - 3 * _h)));
+const CAR_LINEAR_SPEED = DRIVE_SPEED * TRACK_CIRCUMFERENCE;
 const WHEEL_ANGULAR_SPEED = CAR_LINEAR_SPEED / WHEEL_RADIUS;
 
 const WHEEL_NAMES = ['Rad_HL', 'Rad_HR', 'Rad_VL', 'Rad_VR'];
@@ -22,20 +24,30 @@ export function createCar(scene) {
   loader.load('/car.glb', (gltf) => {
     const model = gltf.scene;
 
+    model.scale.setScalar(1.0);
+    model.position.set(TRACK_RX, CAR_HEIGHT, 0);
+    model.updateMatrixWorld(true);
+
     model.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
+      if (!child.isMesh) return;
+
+      // Flache, breite Meshes sind die Platform/Schatten-Ebene aus Blender → ausblenden
+      const box = new THREE.Box3().setFromObject(child);
+      const size = box.getSize(new THREE.Vector3());
+      if (size.y < 0.1 && size.x > 1.0) {
+        child.visible = false;
+        console.log(`Platform ausgeblendet: "${child.name}"`);
+        return;
       }
 
-      // Räder gezielt nach Namen suchen
+      child.castShadow = true;
+      child.receiveShadow = true;
+
       if (WHEEL_NAMES.includes(child.name)) {
         carData.wheels[child.name] = child;
       }
     });
 
-    model.scale.setScalar(0.5);
-    model.position.set(DRIVE_RADIUS, CAR_HEIGHT, 0);
     scene.add(model);
     carData.model = model;
 
@@ -51,22 +63,21 @@ export function createCar(scene) {
 export function updateCar(carData, elapsed) {
   if (!carData.model) return;
 
-  // Position auf Kreisbahn
-  const angle = elapsed * DRIVE_SPEED * Math.PI * 2;
-  carData.model.position.x = Math.cos(angle) * DRIVE_RADIUS;
-  carData.model.position.z = Math.sin(angle) * DRIVE_RADIUS;
+  const t = elapsed * DRIVE_SPEED * Math.PI * 2;
 
-  // Fahrtrichtung (Tangente)
-  const tangentAngle = angle + Math.PI / 2;
-  carData.model.rotation.y = -tangentAngle;
+  // Position auf Oval-Bahn
+  carData.model.position.x = Math.cos(t) * TRACK_RX;
+  carData.model.position.y = CAR_HEIGHT;
+  carData.model.position.z = Math.sin(t) * TRACK_RZ;
 
-  // Physikalisch korrekte Radrotation: Strecke / Radius = Winkel
+  // Tangenten-Richtung des Ovals → Fahrtrichtung
+  // Tangent: dx/dt = -sin(t)*RX, dz/dt = cos(t)*RZ
+  carData.model.rotation.y = Math.atan2(-Math.sin(t) * TRACK_RX, Math.cos(t) * TRACK_RZ) - Math.PI / 2;
+
+  // Physikalisch korrekte Radrotation
   const wheelAngle = elapsed * WHEEL_ANGULAR_SPEED;
-
   WHEEL_NAMES.forEach((name) => {
     const wheel = carData.wheels[name];
-    if (!wheel) return;
-    // Räder drehen sich um ihre lokale X-Achse (Achsrichtung nach Blender-Export)
-    wheel.rotation.x = wheelAngle;
+    if (wheel) wheel.rotation.x = wheelAngle;
   });
 }
