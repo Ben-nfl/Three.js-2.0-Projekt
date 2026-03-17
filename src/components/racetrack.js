@@ -1,37 +1,49 @@
 import * as THREE from 'three';
 import { createTerrainHeightMap, createTerrainNormalMap } from './textures.js';
 
+// halbe breite und höhe der ovalbahn (ellipsen-radien)
 export const TRACK_RX = 20;
 export const TRACK_RZ = 14;
+
+// breite der asphaltfläche in metern
 export const TRACK_WIDTH = 6;
 
-const SEGMENTS = 120;
+// anzahl der segmente für die ellipse (mehr = runder)
+const SEGMENTS = 250;
 
+// berechnet die innere, mittlere und äußere kante der strecke als punktliste
 function computeEdgePoints() {
   const inner = [];
   const center = [];
   const outer = [];
 
   for (let i = 0; i <= SEGMENTS; i++) {
+    // t läuft von 0 bis 2*PI → einmal rund um die ellipse
     const t = (i / SEGMENTS) * Math.PI * 2;
     const cos_t = Math.cos(t);
     const sin_t = Math.sin(t);
 
+    // mittelpunkt auf der ellipse bei diesem winkel
     const cx = cos_t * TRACK_RX;
     const cz = sin_t * TRACK_RZ;
 
+    // tangente an der ellipse (ableitung der parametrischen form)
     const tx_raw = -sin_t * TRACK_RX;
     const tz_raw = cos_t * TRACK_RZ;
     const tLen = Math.sqrt(tx_raw * tx_raw + tz_raw * tz_raw);
+
+    // normierte tangente
     const tnx = tx_raw / tLen;
     const tnz = tz_raw / tLen;
 
-    // Outward normal (perpendicular to tangent in XZ)
+    // außen-normale: 90° gedreht zur tangente (zeigt von der mitte nach außen)
     const nx = tnz;
     const nz = -tnx;
 
+    // innere kante = mitte minus halbe breite in normalen-richtung
     inner.push({ x: cx - nx * TRACK_WIDTH / 2, z: cz - nz * TRACK_WIDTH / 2 });
     center.push({ x: cx, z: cz });
+    // äußere kante = mitte plus halbe breite in normalen-richtung
     outer.push({ x: cx + nx * TRACK_WIDTH / 2, z: cz + nz * TRACK_WIDTH / 2 });
   }
   return { inner, center, outer };
@@ -40,87 +52,102 @@ function computeEdgePoints() {
 export function createRaceTrack(scene) {
   const { inner, center, outer } = computeEdgePoints();
 
-  // --- Grass ground (with height map + normal map) ---
+  // --- grasboden mit höhen- und normalen-karte ---
   const terrainHeightMap = createTerrainHeightMap();
   const terrainNormalMap = createTerrainNormalMap();
+
+  // textur 8×6 mal wiederholen damit sie nicht zu groß wirkt
   terrainHeightMap.repeat.set(8, 6);
   terrainNormalMap.repeat.set(8, 6);
 
+  // große plane als boden mit 80×60 unterteilungen (für displacement)
   const groundGeo = new THREE.PlaneGeometry(150, 120, 80, 60);
   const groundMat = new THREE.MeshStandardMaterial({
-    color: 0x3d8c3d,
-    normalMap: terrainNormalMap,
-    normalScale: new THREE.Vector2(1.5, 1.5),
-    displacementMap: terrainHeightMap,
-    displacementScale: 0.25,
-    displacementBias: -0.12,
-    roughness: 0.9,
+    color: 0x3d8c3d,                              // grüne grasfarbe
+    normalMap: terrainNormalMap,                   // gibt dem boden tiefe/struktur
+    normalScale: new THREE.Vector2(1.5, 1.5),      // stärke des normaleffekts
+    displacementMap: terrainHeightMap,             // hebt/senkt vertices für hügel
+    displacementScale: 0.25,                       // maximale höhe der hügel
+    displacementBias: -0.12,                       // vertikaler offset der verschiebung
+    roughness: 0.9,                                // sehr matt (kein glanz)
     metalness: 0.0,
   });
   const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI / 2;
+  ground.rotation.x = -Math.PI / 2; // plane von xz-ebene auf yz drehen (liegend)
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // --- Asphalt track surface ---
+  // --- asphalt-streckenfläche ---
+  // wird manuell als buffgeometry gebaut damit sie der ellipsenform folgt
   const positions = [];
   const normals = [];
   const uvs = [];
   const indices = [];
 
   for (let i = 0; i <= SEGMENTS; i++) {
+    // je zwei punkte pro segment: innen und außen, leicht über dem boden (y=0.01)
     positions.push(inner[i].x, 0.01, inner[i].z);
     positions.push(outer[i].x, 0.01, outer[i].z);
+
+    // normale zeigt nach oben
     normals.push(0, 1, 0, 0, 1, 0);
+
+    // uv: u=0 innen, u=1 außen; v entlang der bahn
     uvs.push(0, i / SEGMENTS, 1, i / SEGMENTS);
 
     if (i < SEGMENTS) {
+      // zwei dreiecke pro segment ergeben ein viereck (quad)
       const a = i * 2, b = i * 2 + 1, c = i * 2 + 2, d = i * 2 + 3;
       indices.push(a, b, c, b, d, c);
     }
   }
 
+  // buffgeometry manuell aus arrays aufbauen
   const trackGeo = new THREE.BufferGeometry();
   trackGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   trackGeo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   trackGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   trackGeo.setIndex(indices);
 
+  // dunkler asphalt
   const track = new THREE.Mesh(trackGeo, new THREE.MeshLambertMaterial({ color: 0x1c1c1c }));
   track.receiveShadow = true;
   scene.add(track);
 
-  // --- Track edge lines ---
+  // --- streckenmarkierungen (linien) ---
   const whiteMat = new THREE.LineBasicMaterial({ color: 0xffffff });
   const yellowMat = new THREE.LineBasicMaterial({ color: 0xffdd00 });
 
+  // weiße linie innen
   scene.add(new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(inner.map(p => new THREE.Vector3(p.x, 0.05, p.z))),
     whiteMat
   ));
+  // weiße linie außen
   scene.add(new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(outer.map(p => new THREE.Vector3(p.x, 0.05, p.z))),
     whiteMat
   ));
+  // gelbe mittellinie
   scene.add(new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(center.map(p => new THREE.Vector3(p.x, 0.05, p.z))),
     yellowMat
   ));
 
-  // --- Red/white curbing ---
+  // --- rot-weiße randsteine (curbs) ---
   addCurbing(scene, inner, 'inner');
   addCurbing(scene, outer, 'outer');
 
-  // --- Start/Finish line ---
+  // --- start/ziel-linie ---
   const sfMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(TRACK_WIDTH, 1.5),
     new THREE.MeshLambertMaterial({ color: 0xffffff })
   );
   sfMesh.rotation.x = -Math.PI / 2;
-  sfMesh.position.set(TRACK_RX, 0.03, 0);
+  sfMesh.position.set(TRACK_RX, 0.03, 0); // bei t=0, an der rechten seite der ellipse
   scene.add(sfMesh);
 
-  // Checkered pattern on start line (two black strips)
+  // schachbrettmuster auf der startlinie (3 schwarze streifen)
   for (let col = 0; col < 3; col++) {
     const checker = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1.4),
@@ -131,10 +158,10 @@ export function createRaceTrack(scene) {
     scene.add(checker);
   }
 
-  // --- Grandstand ---
+  // --- tribüne ---
   addGrandstand(scene);
 
-  // --- Pit lane marker (simple painted box near start) ---
+  // --- boxengasse-markierung (orange streifen neben der startlinie) ---
   const pitBox = new THREE.Mesh(
     new THREE.BoxGeometry(0.15, 0.15, 3),
     new THREE.MeshLambertMaterial({ color: 0xff8800 })
@@ -143,6 +170,7 @@ export function createRaceTrack(scene) {
   scene.add(pitBox);
 }
 
+// erstellt die rot-weißen randsteine entlang einer kante
 function addCurbing(scene, edgePoints, side) {
   const redMat = new THREE.MeshLambertMaterial({ color: 0xcc2222 });
   const whiteMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
@@ -151,23 +179,31 @@ function addCurbing(scene, edgePoints, side) {
     const a = edgePoints[i];
     const b = edgePoints[i + 1];
 
+    // richtungsvektor des segments
     const dx = b.x - a.x;
     const dz = b.z - a.z;
     const len = Math.sqrt(dx * dx + dz * dz);
-    if (len < 0.001) continue;
+    if (len < 0.001) continue; // zu kurze segmente überspringen
 
-    // Direction of outward normal for curb strip
+    // normierte richtung des segments
     const dirX = dx / len;
     const dirZ = dz / len;
+
+    // außen-richtung: je nachdem ob innen- oder außenkante
     const outX = side === 'inner' ? -dirZ : dirZ;
     const outZ = side === 'inner' ? dirX : -dirX;
 
-    const curbW = 0.5;
-    const curbH = 0.04;
+    const curbW = 0.5;  // breite des randsteins
+    const curbH = 0.04; // höhe des randsteins (sehr flach)
+
+    // mittelposition des randstein-stücks leicht nach außen versetzt
     const midX = (a.x + b.x) / 2 + outX * curbW / 2;
     const midZ = (a.z + b.z) / 2 + outZ * curbW / 2;
+
+    // drehwinkel damit der randstein entlang der kurve ausgerichtet ist
     const angle = Math.atan2(dx, dz);
 
+    // abwechselnd rot und weiß (je 2 segmente)
     const mat = Math.floor(i / 2) % 2 === 0 ? redMat : whiteMat;
     const curbMesh = new THREE.Mesh(
       new THREE.BoxGeometry(curbW, curbH, len),
@@ -179,26 +215,27 @@ function addCurbing(scene, edgePoints, side) {
   }
 }
 
+// baut die tribüne neben der start/ziel-geraden
 function addGrandstand(scene) {
-  // Tribüne liegt außen an der Start/Ziel-Geraden (X-Seite des Ovals)
-  // Äußere Streckenkante bei t=0: x = TRACK_RX + TRACK_WIDTH/2 = 23
-  const BASE_X = TRACK_RX + TRACK_WIDTH / 2 + 2.5; // Front der Tribüne (Spur-Seite)
-  const STAND_LEN = 28;   // Länge entlang Z-Achse
-  const TIERS = 7;
-  const STEP_X = 1.8;     // Tiefe pro Stufe (nach außen, +X)
-  const STEP_Y = 1.25;    // Höhe pro Stufe
-  const SEAT_H = 0.32;    // Dicke der Sitzfläche
+  // tribüne liegt außen an der start/ziel-geraden (x-seite des ovals)
+  const BASE_X = TRACK_RX + TRACK_WIDTH / 2 + 2.5; // vorderkante der tribüne
+  const STAND_LEN = 28;   // länge entlang z-achse
+  const TIERS = 7;         // anzahl sitzreihen
+  const STEP_X = 1.8;     // tiefe pro stufe (nach außen, +x)
+  const STEP_Y = 1.25;    // höhe pro stufe
+  const SEAT_H = 0.32;    // dicke der sitzfläche
 
   const concreteMat = new THREE.MeshLambertMaterial({ color: 0xc0c0c0 });
+
+  // abwechselnd blaue und rote sitzreihen
   const seatColors = [0x1a3a99, 0xbb1a1a, 0x1a3a99, 0xbb1a1a, 0x1a3a99, 0xbb1a1a, 0x1a3a99];
 
-  // Betonstufen: Jede Stufe ist ein lückenloses Box-Segment das von Boden bis zur
-  // jeweiligen Sitzhöhe reicht → ergibt von der Seite gesehen ein echtes Treppenprofil
+  // jede stufe ist ein voller betonsockel von boden bis sitzfläche → echtes treppenprofil
   for (let row = 0; row < TIERS; row++) {
-    const stepTopY = (row + 1) * STEP_Y;
-    const stepX = BASE_X + row * STEP_X;
+    const stepTopY = (row + 1) * STEP_Y; // oberkante dieser stufe
+    const stepX = BASE_X + row * STEP_X; // x-position dieser stufe
 
-    // Betonsockel dieser Stufe
+    // betonsockel: reicht vom boden bis zur sitzkante
     const concrete = new THREE.Mesh(
       new THREE.BoxGeometry(STEP_X, stepTopY, STAND_LEN),
       concreteMat
@@ -207,7 +244,7 @@ function addGrandstand(scene) {
     concrete.receiveShadow = true;
     scene.add(concrete);
 
-    // Farbige Sitzfläche obendrauf
+    // farbige sitzfläche obendrauf
     const seat = new THREE.Mesh(
       new THREE.BoxGeometry(STEP_X, SEAT_H, STAND_LEN),
       new THREE.MeshLambertMaterial({ color: seatColors[row] })
@@ -217,11 +254,11 @@ function addGrandstand(scene) {
     scene.add(seat);
   }
 
-  const totalW = TIERS * STEP_X;           // Gesamttiefe der Tribüne
-  const totalH = TIERS * STEP_Y;           // Gesamthöhe der Sitzreihen
-  const backX  = BASE_X + totalW;          // X-Position der Rückwand
+  const totalW = TIERS * STEP_X;   // gesamttiefe der tribüne
+  const totalH = TIERS * STEP_Y;   // gesamthöhe der sitzreihen
+  const backX  = BASE_X + totalW;  // x-position der rückwand
 
-  // Rückwand
+  // rückwand
   const wallH = totalH + 2.5;
   const backWall = new THREE.Mesh(
     new THREE.BoxGeometry(0.5, wallH, STAND_LEN + 0.4),
@@ -231,7 +268,7 @@ function addGrandstand(scene) {
   backWall.castShadow = true;
   scene.add(backWall);
 
-  // Seitenwände (Abschluss links/rechts)
+  // seitenwände links und rechts
   for (const side of [-1, 1]) {
     const sideWall = new THREE.Mesh(
       new THREE.BoxGeometry(totalW + 0.5, wallH, 0.4),
@@ -242,9 +279,9 @@ function addGrandstand(scene) {
     scene.add(sideWall);
   }
 
-  // Dach (flache Platte, etwas überstehend)
+  // dach (flache platte, etwas über die vorderseite hinaus)
   const roofY  = wallH + 0.15;
-  const roofW  = totalW + 3;       // etwas über Front hinaus
+  const roofW  = totalW + 3;
   const roofCX = backX - roofW / 2 + 0.5;
   const roof = new THREE.Mesh(
     new THREE.BoxGeometry(roofW, 0.25, STAND_LEN + 1.5),
@@ -255,11 +292,12 @@ function addGrandstand(scene) {
   roof.receiveShadow = true;
   scene.add(roof);
 
-  // Vordere Stützsäulen (Dach-Front, Boden bis Dach)
+  // vordere stützsäulen (tragen das dach auf der strecken-seite)
   const colMat = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
   const colX   = BASE_X - 0.5;
   const colCount = 5;
   for (let c = 0; c < colCount; c++) {
+    // säulen gleichmäßig über die länge der tribüne verteilen
     const colZ = -STAND_LEN / 2 + (c / (colCount - 1)) * STAND_LEN;
     const col = new THREE.Mesh(
       new THREE.CylinderGeometry(0.18, 0.22, roofY, 8),
@@ -270,7 +308,7 @@ function addGrandstand(scene) {
     scene.add(col);
   }
 
-  // Werbebanden entlang der Vorderfront (unten)
+  // werbebanden an der vorderfront (verschiedene farben)
   const bannerColors = [0xffdd00, 0xff4400, 0x0044ff, 0x00aa44, 0xffdd00, 0xff4400, 0x0044ff];
   const bannerCount = 7;
   const bannerW = STAND_LEN / bannerCount;

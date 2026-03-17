@@ -16,10 +16,11 @@
 12. [Baeume](#baeume)
 13. [Zuschauertribuene](#zuschauertribuene)
 14. [Post-Processing](#post-processing)
-15. [Render-Pipeline](#render-pipeline)
-16. [Performance-Optimierungen](#performance-optimierungen)
-17. [Verwendete Three.js-Features](#verwendete-threejs-features)
-18. [Code-Beispiele](#code-beispiele)
+15. [GUI & Steuerungsparameter](#gui--steuerungsparameter)
+16. [Render-Pipeline](#render-pipeline)
+17. [Performance-Optimierungen](#performance-optimierungen)
+18. [Verwendete Three.js-Features](#verwendete-threejs-features)
+19. [Code-Beispiele](#code-beispiele)
 
 ---
 
@@ -132,11 +133,13 @@ Three.js 2.0 Projekt/
     ├── main.ts             # Haupteinstiegspunkt (TypeScript), Init und Animationsloop
     ├── style.css           # Globale Styles (Fullscreen-Canvas)
     └── components/
-        ├── scene.js        # Szene, Kamera, Renderer, OrbitControls
-        ├── racetrack.js    # Rennstrecke: Oval, Curbing, Zielline, Tribunee
-        ├── trees.js        # Prozedurale Tannenbaeume
-        ├── raceLights.js   # Beleuchtung: Sonne, Hemisphaerenicht, Flutlichter
-        ├── car.js          # Blender-Auto: GLTFLoader + Oval-Animation + Radrotation
+        ├── scene.js          # Szene, Kamera, Renderer, OrbitControls
+        ├── racetrack.js      # Rennstrecke: Oval, Curbing, Zielline, Tribunee
+        ├── trees.js          # Prozedurale Tannenbaeume
+        ├── raceLights.js     # Beleuchtung: Sonne, Hemisphaerenicht, Flutlichter
+        ├── car.js            # Blender-Auto: GLTFLoader + Oval-Animation + Radrotation
+        ├── textures.js       # Prozedurale Terrain-Hoehen- und Normalmaps (Canvas)
+        ├── gui.js            # Interaktives Kontrollpanel (lil-gui)
         └── postprocessing.js # Bloom-Effekt (UnrealBloomPass)
 ```
 
@@ -169,6 +172,8 @@ main.ts
   ├── createCar()           → GLB-Modell laden, Raedern zuweisen, Platform ausblenden
   │
   ├── createPostProcessing() → EffectComposer mit minimalem Bloom
+  │
+  ├── createGUI()            → lil-gui Kontrollpanel (Licht, Bloom, Auto-Geschwindigkeit)
   │
   └── animate()              → Animationsloop (requestAnimationFrame)
         ├── updateCar()            Auto auf Oval-Bahn + Radrotation
@@ -447,6 +452,10 @@ outer = { x: cx + nx * TRACK_WIDTH/2,  z: cz + nz * TRACK_WIDTH/2 };
 
 Aus diesen Punkten wird eine `BufferGeometry` mit `(SEGMENTS+1) * 2` Vertices und entsprechenden Dreieck-Indices zusammengesetzt.
 
+### Terrain-Texturen (`textures.js`)
+
+Der Grasboden verwendet prozedurale Hoehen- und Normalmaps, die zur Laufzeit per Canvas-API generiert werden. `createTerrainHeightMap()` erzeugt eine Heightmap aus ueberlagerten Sinus-Wellen (Multi-Oktaven), `createTerrainNormalMap()` berechnet daraus eine passende Normalmap fuer plastische Oberflaechenstruktur. Diese Texturen werden direkt in `racetrack.js` als `displacementMap` und `normalMap` des Bodens verwendet.
+
 ### Linien und Markierungen
 
 - **Weisse Randlinien** (innen + aussen): `THREE.Line` entlang der Edge-Punkte
@@ -523,6 +532,25 @@ Szene → RenderPass → UnrealBloomPass → OutputPass → Bildschirm
 | Threshold | 0.9 | Nur sehr helle Bereiche leuchten |
 
 Der `OutputPass` sorgt fuer korrekte Farbraum-Konvertierung nach dem Tonemapping.
+
+---
+
+## GUI & Steuerungsparameter
+
+**Datei:** `src/components/gui.js`
+
+Das interaktive Kontrollpanel basiert auf **lil-gui** und erlaubt das Anpassen von Szenen-Parametern im laufenden Betrieb ohne Neustart.
+
+### Ordner und Parameter
+
+| Ordner | Parameter | Beschreibung |
+|---|---|---|
+| **Atmosphaere** | `fog.density` | Nebeldichte (atmosphaerische Tiefe) |
+| **Sonne** | `sun.intensity`, `sun.color` | Intensitaet und Farbe der DirectionalLight |
+| **Fuell-Licht** | `hemi.intensity`, `ambient.intensity` | Helligkeit von Hemisphaerenicht und Ambient |
+| **Flutlichter** | `spotIntensity` | Gemeinsame Intensitaet aller 4 SpotLights |
+| **Bloom** | `strength`, `radius`, `threshold` | UnrealBloomPass-Parameter |
+| **Auto** | `speed` | Fahrgeschwindigkeit (`DRIVE_SPEED`-Multiplikator) |
 
 ---
 
